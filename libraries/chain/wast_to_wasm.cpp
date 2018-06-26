@@ -33,13 +33,13 @@ namespace eosio { namespace chain {
             ss << error.locus.sourceLine << std::endl;
             ss << std::setw(error.locus.column(8)) << "^" << std::endl;
          }
-         FC_ASSERT( !"error parsing wast", "${msg}", ("msg",ss.get()) );
+         FC_ASSERT( !"error parsing wast", "${msg}", ("msg",ss.str()) );
       }
 
- 		for(auto sectionIt = module.userSections.begin();sectionIt != module.userSections.end();++sectionIt)
-		{
-			if(sectionIt->name == "name") { module.userSections.erase(sectionIt); break; }
-		}
+      for(auto sectionIt = module.userSections.begin();sectionIt != module.userSections.end();++sectionIt)
+      {
+         if(sectionIt->name == "name") { module.userSections.erase(sectionIt); break; }
+      }
 
       try
       {
@@ -48,10 +48,14 @@ namespace eosio { namespace chain {
          WASM::serialize(stream,module);
          return stream.getBytes();
       }
-      catch(Serialization::FatalSerializationException exception)
+      catch(const Serialization::FatalSerializationException& exception)
       {
          ss << "Error serializing WebAssembly binary file:" << std::endl;
          ss << exception.message << std::endl;
+         FC_ASSERT( !"error converting to wasm", "${msg}", ("msg",ss.get()) );
+      } catch(const IR::ValidationException& e) {
+         ss << "Error validating WebAssembly binary file:" << std::endl;
+         ss << e.message << std::endl;
          FC_ASSERT( !"error converting to wasm", "${msg}", ("msg",ss.get()) );
       }
 

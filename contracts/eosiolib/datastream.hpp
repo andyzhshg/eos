@@ -1,16 +1,28 @@
 /**
- *  @file db.h
+ *  @file datastream.hpp
  *  @copyright defined in eos/LICENSE.txt
  */
 #pragma once
 #include <eosiolib/system.h>
 #include <eosiolib/memory.h>
 #include <eosiolib/vector.hpp>
+#include <boost/container/flat_set.hpp>
+#include <boost/container/flat_map.hpp>
 #include <eosiolib/varint.hpp>
+#include <array>
+#include <set>
+#include <map>
 #include <string>
+
+#include <boost/fusion/algorithm/iteration/for_each.hpp>
+#include <boost/fusion/include/for_each.hpp>
+
+#include <boost/pfr.hpp>
 
 
 namespace eosio {
+
+
 /**
  *  @brief A data stream for reading and writing data in the form of bytes
  */
@@ -48,7 +60,7 @@ class datastream {
       */
       inline bool write( const char* d, size_t s ) {
         eosio_assert( _end - _pos >= (int32_t)s, "write" );
-        memcpy( _pos, d, s );
+        memcpy( (void*)_pos, d, s );
         _pos += s;
         return true;
       }
@@ -132,13 +144,36 @@ class datastream<size_t> {
 };
 
 /**
+ *  Serialize a public_key into a stream
+ *  @brief Serialize a public_key
+ *  @param ds stream to write
+ *  @param pubkey value to serialize
+ */
+template<typename Stream>
+inline datastream<Stream>& operator<<(datastream<Stream>& ds, const public_key pubkey) {
+  ds.write( (const char*)&pubkey, sizeof(pubkey));
+  return ds;
+}
+/**
+ *  Deserialize a public_key from a stream
+ *  @brief Deserialize a public_key
+ *  @param ds stream to read
+ *  @param pubkey destination for deserialized value
+ */
+template<typename Stream>
+inline datastream<Stream>& operator>>(datastream<Stream>& ds, public_key& pubkey) {
+  ds.read((char*)&pubkey, sizeof(pubkey));
+  return ds;
+}
+
+/**
  *  Serialize a key256 into a stream
  *  @brief Serialize a key256
  *  @param ds stream to write
  *  @param d value to serialize
  */
 template<typename Stream>
-inline datastream<Stream>& operator<<(datastream<Stream>& ds, const key256 d) {
+inline datastream<Stream>& operator<<(datastream<Stream>& ds, const key256& d) {
   ds.write( (const char*)d.data(), d.size() );
   return ds;
 }
@@ -154,98 +189,6 @@ inline datastream<Stream>& operator>>(datastream<Stream>& ds, key256& d) {
   return ds;
 }
 
-/**
- *  Serialize a uint128_t into a stream
- *  @brief Serialize a uint128_t
- *  @param ds stream to write
- *  @param d value to serialize
- */
-template<typename Stream>
-inline datastream<Stream>& operator<<(datastream<Stream>& ds, const uint128_t d) {
-  ds.write( (const char*)&d, sizeof(d) );
-  return ds;
-}
-/**
- *  Deserialize a uint128_t from a stream
- *  @brief Deserialize a uint128_t
- *  @param ds stream to read
- *  @param d destination for deserialized value
- */
-template<typename Stream>
-inline datastream<Stream>& operator>>(datastream<Stream>& ds, uint128_t& d) {
-  ds.read((char*)&d, sizeof(d) );
-  return ds;
-}
-
-/**
- *  Serialize a int128_t into a stream
- *  @brief Serialize a int128_t
- *  @param ds stream to write
- *  @param d value to serialize
- */
-template<typename Stream>
-inline datastream<Stream>& operator<<(datastream<Stream>& ds, const int128_t d) {
-  ds.write( (const char*)&d, sizeof(d) );
-  return ds;
-}
-/**
- *  Deserialize a int128_t from a stream
- *  @brief Deserialize a int128_t
- *  @param ds stream to read
- *  @param d destination for deserialized value
- */
-template<typename Stream>
-inline datastream<Stream>& operator>>(datastream<Stream>& ds, int128_t& d) {
-  ds.read((char*)&d, sizeof(d) );
-  return ds;
-}
-
-/**
- *  Serialize a int32_t into a stream
- *  @brief Serialize a int32_t
- *  @param ds stream to write
- *  @param d value to serialize
- */
-template<typename Stream>
-inline datastream<Stream>& operator<<(datastream<Stream>& ds, const int32_t d) {
-  ds.write( (const char*)&d, sizeof(d) );
-  return ds;
-}
-/**
- *  Deserialize a int32_t from a stream
- *  @brief Deserialize a int32_t
- *  @param ds stream to read
- *  @param d destination for deserialized value
- */
-template<typename Stream>
-inline datastream<Stream>& operator>>(datastream<Stream>& ds, int32_t& d) {
-  ds.read((char*)&d, sizeof(d) );
-  return ds;
-}
-
-/**
- *  Serialize a uint32_t into a stream
- *  @brief Serialize a uint32_t
- *  @param ds stream to write
- *  @param d value to serialize
- */
-template<typename Stream>
-inline datastream<Stream>& operator<<(datastream<Stream>& ds, const uint32_t d) {
-  ds.write( (const char*)&d, sizeof(d) );
-  return ds;
-}
-/**
- *  Deserialize a uint32_t from a stream
- *  @brief Deserialize a uint32_t
- *  @param ds stream to read
- *  @param d destination for deserialized value
- */
-template<typename Stream>
-inline datastream<Stream>& operator>>(datastream<Stream>& ds, uint32_t& d) {
-  ds.read((char*)&d, sizeof(d) );
-  return ds;
-}
-
 template<typename Stream>
 inline datastream<Stream>& operator<<(datastream<Stream>& ds, const bool& d) {
   return ds << uint8_t(d);
@@ -258,160 +201,127 @@ inline datastream<Stream>& operator>>(datastream<Stream>& ds, bool& d) {
   return ds;
 }
 
-
 /**
- *  Serialize a int64_t into a stream
- *  @brief Serialize a int64_t
+ *  Serialize a checksum256 into a stream
+ *  @brief Serialize a checksum256
  *  @param ds stream to write
  *  @param d value to serialize
  */
 template<typename Stream>
-inline datastream<Stream>& operator<<(datastream<Stream>& ds, const int64_t d) {
-  ds.write( (const char*)&d, sizeof(d) );
-  return ds;
+inline datastream<Stream>& operator<<(datastream<Stream>& ds, const checksum256& d) {
+   ds.write( (const char*)&d.hash[0], sizeof(d.hash) );
+   return ds;
 }
 /**
- *  Deserialize a int64_t from a stream
- *  @brief Deserialize a int64_t
+ *  Deserialize a checksum256 from a stream
+ *  @brief Deserialize a checksum256
  *  @param ds stream to read
  *  @param d destination for deserialized value
  */
 template<typename Stream>
-inline datastream<Stream>& operator>>(datastream<Stream>& ds, int64_t& d) {
-  ds.read((char*)&d, sizeof(d) );
-  return ds;
-}
-
-/**
- *  Serialize a uint64_t into a stream
- *  @brief Serialize a uint64_t
- *  @param ds stream to write
- *  @param d value to serialize
- */
-template<typename Stream>
-inline datastream<Stream>& operator<<(datastream<Stream>& ds, const uint64_t d) {
-  ds.write( (const char*)&d, sizeof(d) );
-  return ds;
-}
-/**
- *  Deserialize a uint64_t from a stream
- *  @brief Deserialize a uint64_t
- *  @param ds stream to read
- *  @param d destination for deserialized value
- */
-template<typename Stream>
-inline datastream<Stream>& operator>>(datastream<Stream>& ds, uint64_t& d) {
-  ds.read((char*)&d, sizeof(d) );
-  return ds;
-}
-
-/**
- *  Serialize a int16_t into a stream
- *  @brief Serialize a int16_t
- *  @param ds stream to write
- *  @param d value to serialize
- */
-template<typename Stream>
-inline datastream<Stream>& operator<<(datastream<Stream>& ds, const int16_t d) {
-  ds.write( (const char*)&d, sizeof(d) );
-  return ds;
-}
-/**
- *  Deserialize a int16_t from a stream
- *  @brief Deserialize a int16_t
- *  @param ds stream to read
- *  @param d destination for deserialized value
- */
-template<typename Stream>
-inline datastream<Stream>& operator>>(datastream<Stream>& ds, int16_t& d) {
-  ds.read((char*)&d, sizeof(d) );
-  return ds;
-}
-
-/**
- *  Serialize a uint16_t into a stream
- *  @brief Serialize a uint16_t
- *  @param ds stream to write
- *  @param d value to serialize
- */
-template<typename Stream>
-inline datastream<Stream>& operator<<(datastream<Stream>& ds, const uint16_t d) {
-  ds.write( (const char*)&d, sizeof(d) );
-  return ds;
-}
-/**
- *  Deserialize a uint16_t from a stream
- *  @brief Deserialize a uint16_t
- *  @param ds stream to read
- *  @param d destination for deserialized value
- */
-template<typename Stream>
-inline datastream<Stream>& operator>>(datastream<Stream>& ds, uint16_t& d) {
-  ds.read((char*)&d, sizeof(d) );
-  return ds;
-}
-
-/**
- *  Serialize a int8_t into a stream
- *  @brief Serialize a int8_t
- *  @param ds stream to write
- *  @param d value to serialize
- */
-template<typename Stream>
-inline datastream<Stream>& operator<<(datastream<Stream>& ds, const int8_t d) {
-  ds.write( (const char*)&d, sizeof(d) );
-  return ds;
-}
-/**
- *  Deserialize a int8_t from a stream
- *  @brief Deserialize a int8_t
- *  @param ds stream to read
- *  @param d destination for deserialized value
- */
-template<typename Stream>
-inline datastream<Stream>& operator>>(datastream<Stream>& ds, int8_t& d) {
-  ds.read((char*)&d, sizeof(d) );
-  return ds;
-}
-
-/**
- *  Serialize a uint8_t into a stream
- *  @brief Serialize a uint8_t
- *  @param ds stream to write
- *  @param d value to serialize
- */
-template<typename Stream>
-inline datastream<Stream>& operator<<(datastream<Stream>& ds, const uint8_t d) {
-  ds.write( (const char*)&d, sizeof(d) );
-  return ds;
-}
-/**
- *  Deserialize a uint8_t from a stream
- *  @brief Deserialize a uint8_t
- *  @param ds stream to read
- *  @param d destination for deserialized value
- */
-template<typename Stream>
-inline datastream<Stream>& operator>>(datastream<Stream>& ds, uint8_t& d) {
-  ds.read((char*)&d, sizeof(d) );
-  return ds;
+inline datastream<Stream>& operator>>(datastream<Stream>& ds, checksum256& d) {
+   ds.read((char*)&d.hash[0], sizeof(d.hash) );
+   return ds;
 }
 
 template<typename DataStream>
 DataStream& operator << ( DataStream& ds, const std::string& v ) {
    ds << unsigned_int( v.size() );
-   for( const auto& i : v )
-      ds << i;
+   if (v.size())
+      ds.write(v.data(), v.size());
    return ds;
 }
 
 template<typename DataStream>
 DataStream& operator >> ( DataStream& ds, std::string& v ) {
-   unsigned_int s;
-   ds >> s;
-   v.resize(s.value);
+   std::vector<char> tmp;
+   ds >> tmp;
+   if( tmp.size() )
+      v = std::string(tmp.data(),tmp.data()+tmp.size());
+   else
+      v = std::string();
+   return ds;
+}
+
+template<typename DataStream, typename T, std::size_t N>
+DataStream& operator << ( DataStream& ds, const std::array<T,N>& v ) {
+   for( const auto& i : v )
+      ds << i;
+   return ds;
+}
+
+template<typename DataStream, typename T, std::size_t N>
+DataStream& operator >> ( DataStream& ds, std::array<T,N>& v ) {
    for( auto& i : v )
       ds >> i;
+   return ds;
+}
+
+namespace _datastream_detail {
+   template<typename T>
+   constexpr bool is_pointer() {
+      return std::is_pointer<T>::value ||
+             std::is_null_pointer<T>::value ||
+             std::is_member_pointer<T>::value;
+   }
+
+   template<typename T>
+   constexpr bool is_primitive() {
+      return std::is_arithmetic<T>::value ||
+             std::is_enum<T>::value;
+   }
+}
+
+template<typename DataStream, typename T, std::enable_if_t<_datastream_detail::is_pointer<T>()>* = nullptr>
+DataStream& operator >> ( DataStream& ds, T ) {
+   static_assert(!_datastream_detail::is_pointer<T>(), "Pointers should not be serialized" );
+   return ds;
+}
+
+template<typename DataStream, typename T, std::size_t N,
+         std::enable_if_t<!_datastream_detail::is_primitive<T>() &&
+                          !_datastream_detail::is_pointer<T>()>* = nullptr>
+DataStream& operator << ( DataStream& ds, const T (&v)[N] ) {
+   ds << unsigned_int( N );
+   for( uint32_t i = 0; i < N; ++i )
+      ds << v[i];
+   return ds;
+}
+
+template<typename DataStream, typename T, std::size_t N,
+         std::enable_if_t<_datastream_detail::is_primitive<T>()>* = nullptr>
+DataStream& operator << ( DataStream& ds, const T (&v)[N] ) {
+   ds << unsigned_int( N );
+   ds.write((char*)&v[0], sizeof(v));
+   return ds;
+}
+
+template<typename DataStream, typename T, std::size_t N,
+         std::enable_if_t<!_datastream_detail::is_primitive<T>() &&
+                          !_datastream_detail::is_pointer<T>()>* = nullptr>
+DataStream& operator >> ( DataStream& ds, T (&v)[N] ) {
+   unsigned_int s;
+   ds >> s;
+   eosio_assert( N == s.value, "T[] size and unpacked size don't match");
+   for( uint32_t i = 0; i < N; ++i )
+      ds >> v[i];
+   return ds;
+}
+
+template<typename DataStream, typename T, std::size_t N,
+         std::enable_if_t<_datastream_detail::is_primitive<T>()>* = nullptr>
+DataStream& operator >> ( DataStream& ds, T (&v)[N] ) {
+   unsigned_int s;
+   ds >> s;
+   eosio_assert( N == s.value, "T[] size and unpacked size don't match");
+   ds.read((char*)&v[0], sizeof(v));
+   return ds;
+}
+
+template<typename DataStream>
+DataStream& operator << ( DataStream& ds, const vector<char>& v ) {
+   ds << unsigned_int( v.size() );
+   ds.write( v.data(), v.size() );
    return ds;
 }
 
@@ -420,6 +330,15 @@ DataStream& operator << ( DataStream& ds, const vector<T>& v ) {
    ds << unsigned_int( v.size() );
    for( const auto& i : v )
       ds << i;
+   return ds;
+}
+
+template<typename DataStream>
+DataStream& operator >> ( DataStream& ds, vector<char>& v ) {
+   unsigned_int s;
+   ds >> s;
+   v.resize( s.value );
+   ds.read( v.data(), v.size() );
    return ds;
 }
 
@@ -433,12 +352,147 @@ DataStream& operator >> ( DataStream& ds, vector<T>& v ) {
    return ds;
 }
 
+template<typename DataStream, typename T>
+DataStream& operator << ( DataStream& ds, const std::set<T>& s ) {
+   ds << unsigned_int( s.size() );
+   for( const auto& i : s ) {
+      ds << i;
+   }
+   return ds;
+}
+
+template<typename DataStream, typename T>
+DataStream& operator >> ( DataStream& ds, std::set<T>& s ) {
+   s.clear();
+   unsigned_int sz; ds >> sz;
+
+   for( uint32_t i = 0; i < sz.value; ++i ) {
+      T v;
+      ds >> v;
+      s.emplace( std::move(v) );
+   }
+   return ds;
+}
+
+template<typename DataStream, typename K, typename V>
+DataStream& operator << ( DataStream& ds, const std::map<K,V>& m ) {
+   ds << unsigned_int( m.size() );
+   for( const auto& i : m ) {
+      ds << i.first << i.second;
+   }
+   return ds;
+}
+
+template<typename DataStream, typename K, typename V>
+DataStream& operator >> ( DataStream& ds, std::map<K,V>& m ) {
+   m.clear();
+   unsigned_int s; ds >> s;
+
+   for (uint32_t i = 0; i < s.value; ++i) {
+      K k; V v;
+      ds >> k >> v;
+      m.emplace( std::move(k), std::move(v) );
+   }
+   return ds;
+}
+
+template<typename DataStream, typename T>
+DataStream& operator << ( DataStream& ds, const boost::container::flat_set<T>& s ) {
+   ds << unsigned_int( s.size() );
+   for( const auto& i : s ) {
+      ds << i;
+   }
+   return ds;
+}
+
+template<typename DataStream, typename T>
+DataStream& operator >> ( DataStream& ds, boost::container::flat_set<T>& s ) {
+   s.clear();
+   unsigned_int sz; ds >> sz;
+
+   for( uint32_t i = 0; i < sz.value; ++i ) {
+      T v;
+      ds >> v;
+      s.emplace( std::move(v) );
+   }
+   return ds;
+}
+
+template<typename DataStream, typename K, typename V>
+DataStream& operator<<( DataStream& ds, const boost::container::flat_map<K,V>& m ) {
+   ds << unsigned_int( m.size() );
+   for( const auto& i : m )
+      ds << i.first << i.second;
+   return ds;
+}
+
+template<typename DataStream, typename K, typename V>
+DataStream& operator>>( DataStream& ds, boost::container::flat_map<K,V>& m ) {
+   m.clear();
+   unsigned_int s; ds >> s;
+
+   for( uint32_t i = 0; i < s.value; ++i ) {
+      K k; V v;
+      ds >> k >> v;
+      m.emplace( std::move(k), std::move(v) );
+   }
+   return ds;
+}
+
+template<typename DataStream, typename... Args>
+DataStream& operator<<( DataStream& ds, const std::tuple<Args...>& t ) {
+   boost::fusion::for_each( t, [&]( const auto& i ) {
+       ds << i;
+   });
+   return ds;
+}
+
+template<typename DataStream, typename... Args>
+DataStream& operator>>( DataStream& ds, std::tuple<Args...>& t ) {
+   boost::fusion::for_each( t, [&]( auto& i ) {
+       ds >> i;
+   });
+   return ds;
+}
+
+template<typename DataStream, typename T, std::enable_if_t<std::is_class<T>::value>* = nullptr>
+DataStream& operator<<( DataStream& ds, const T& v ) {
+   boost::pfr::for_each_field(v, [&](const auto& field) {
+      ds << field;
+   });
+   return ds;
+}
+template<typename DataStream, typename T, std::enable_if_t<std::is_class<T>::value>* = nullptr>
+DataStream& operator>>( DataStream& ds, T& v ) {
+   boost::pfr::for_each_field(v, [&](auto& field) {
+      ds >> field;
+   });
+   return ds;
+}
+
+template<typename DataStream, typename T, std::enable_if_t<_datastream_detail::is_primitive<T>()>* = nullptr>
+DataStream& operator<<( DataStream& ds, const T& v ) {
+   ds.write( (const char*)&v, sizeof(T) );
+   return ds;
+}
+
+template<typename DataStream, typename T, std::enable_if_t<_datastream_detail::is_primitive<T>()>* = nullptr>
+DataStream& operator>>( DataStream& ds, T& v ) {
+   ds.read( (char*)&v, sizeof(T) );
+   return ds;
+}
+
 template<typename T>
 T unpack( const char* buffer, size_t len ) {
    T result;
    datastream<const char*> ds(buffer,len);
    ds >> result;
    return result;
+}
+
+template<typename T>
+T unpack( const vector<char>& bytes ) {
+   return unpack<T>( bytes.data(), bytes.size() );
 }
 
 template<typename T>
@@ -456,6 +510,30 @@ bytes pack( const T& value ) {
   datastream<char*> ds( result.data(), result.size() );
   ds << value;
   return result;
+}
+
+template<typename Stream>
+inline datastream<Stream>& operator<<(datastream<Stream>& ds, const checksum160& cs) {
+   ds.write((const char*)&cs.hash[0], sizeof(cs.hash));
+   return ds;
+}
+
+template<typename Stream>
+inline datastream<Stream>& operator>>(datastream<Stream>& ds, checksum160& cs) {
+   ds.read((char*)&cs.hash[0], sizeof(cs.hash));
+   return ds;
+}
+
+template<typename Stream>
+inline datastream<Stream>& operator<<(datastream<Stream>& ds, const checksum512& cs) {
+   ds.write((const char*)&cs.hash[0], sizeof(cs.hash));
+   return ds;
+}
+
+template<typename Stream>
+inline datastream<Stream>& operator>>(datastream<Stream>& ds, checksum512& cs) {
+   ds.read((char*)&cs.hash[0], sizeof(cs.hash));
+   return ds;
 }
 
 }

@@ -1,4 +1,5 @@
 {
+  "version": "eosio::abi/1.0",
   "types": [],
   "structs": [{
       "name": "trigger",
@@ -10,8 +11,11 @@
   ],
   "actions": [{
       "name": "trigger",
-      "type": "trigger"
+      "type": "trigger",
+      "ricaridian_contract": ""
     }
   ],
-  "tables": []
+  "tables": [],
+  "ricardian_clauses": [],
+  "abi_extensions": []
 }

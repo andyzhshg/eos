@@ -3,30 +3,14 @@
 #include <eosio/chain/wasm_interface.hpp>
 #include <eosio/chain/wasm_eosio_constraints.hpp>
 
-#include <boost/multiprecision/cpp_dec_float.hpp>
+#define EOSIO_INJECTED_MODULE_NAME "eosio_injection"
 
 using namespace fc;
 
-namespace eosio { namespace chain { namespace webassembly { namespace common {
+namespace eosio { namespace chain { 
 
-   using wasm_double = boost::multiprecision::cpp_dec_float_50;
-
-   struct wasm_context {
-      wasm_context(wasm_cache::entry &code, apply_context& ctx, wasm_interface::vm_type vm)
-      : code(code)
-      , context(ctx)
-      , vm(vm)
-      {
-      }
-      eosio::chain::wasm_cache::entry& code;
-      apply_context& context;
-      wasm_interface::vm_type vm;
-   };
-
-   class intrinsics_accessor {
-   public:
-      static wasm_context &get_context(wasm_interface &wasm);
-   };
+   class apply_context;
+   class transaction_context;
 
    template<typename T>
    struct class_from_wasm {
@@ -35,8 +19,21 @@ namespace eosio { namespace chain { namespace webassembly { namespace common {
        * @param wasm - the wasm_interface to use
        * @return
        */
-      static auto value(wasm_interface &wasm) {
-         return T(wasm);
+      static auto value(apply_context& ctx) {
+         return T(ctx);
+      }
+   };
+   
+   template<>
+   struct class_from_wasm<transaction_context> {
+      /**
+       * by default this is just constructing an object
+       * @param wasm - the wasm_interface to use
+       * @return
+       */
+      template <typename ApplyCtx>
+      static auto &value(ApplyCtx& ctx) {
+         return ctx.trx_context;
       }
    };
 
@@ -47,8 +44,8 @@ namespace eosio { namespace chain { namespace webassembly { namespace common {
        * @param wasm
        * @return
        */
-      static auto &value(wasm_interface &wasm) {
-         return intrinsics_accessor::get_context(wasm).context;
+      static auto &value(apply_context& ctx) {
+         return ctx;
       }
    };
 
@@ -77,7 +74,7 @@ namespace eosio { namespace chain { namespace webassembly { namespace common {
       }
 
       T *value;
-   };
+   }; 
 
    /**
     * class to represent an in-wasm-memory char array that must be null terminated
@@ -101,4 +98,4 @@ namespace eosio { namespace chain { namespace webassembly { namespace common {
       char *value;
    };
 
- } } } } // eosio::chain
+ } } // eosio::chain

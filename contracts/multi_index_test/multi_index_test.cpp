@@ -56,13 +56,13 @@ struct limit_order {
                      indexed_by< N(byprice), const_mem_fun<limit_order, uint128_t, &limit_order::get_price> >
                      > orders( N(multitest), N(multitest) );
 
-                  const auto& order1 = orders.emplace( payer, [&]( auto& o ) {
+                  orders.emplace( payer, [&]( auto& o ) {
                     o.id = 1;
                     o.expiration = 300;
                     o.owner = N(dan);
                   });
 
-                  const auto& order2 = orders.emplace( payer, [&]( auto& o ) {
+                  auto order2 = orders.emplace( payer, [&]( auto& o ) {
                      o.id = 2;
                      o.expiration = 200;
                      o.owner = N(alice);
@@ -70,24 +70,24 @@ struct limit_order {
 
                   print("Items sorted by primary key:\n");
                   for( const auto& item : orders ) {
-                     print(" ID=", item.id, ", expiration=", item.expiration, ", owner=", name(item.owner), "\n");
+                     print(" ID=", item.id, ", expiration=", item.expiration, ", owner=", name{item.owner}, "\n");
                   }
 
                   auto expidx = orders.get_index<N(byexp)>();
 
                   print("Items sorted by expiration:\n");
                   for( const auto& item : expidx ) {
-                     print(" ID=", item.id, ", expiration=", item.expiration, ", owner=", name(item.owner), "\n");
+                     print(" ID=", item.id, ", expiration=", item.expiration, ", owner=", name{item.owner}, "\n");
                   }
 
-                  print("Updating expiration of order with ID=2 to 400.\n");
-                  orders.update( order2, payer, [&]( auto& o ) {
+                  print("Modifying expiration of order with ID=2 to 400.\n");
+                  orders.modify( order2, payer, [&]( auto& o ) {
                      o.expiration = 400;
                   });
 
                   print("Items sorted by expiration:\n");
                   for( const auto& item : expidx ) {
-                     print(" ID=", item.id, ", expiration=", item.expiration, ", owner=", name(item.owner), "\n");
+                     print(" ID=", item.id, ", expiration=", item.expiration, ", owner=", name{item.owner}, "\n");
                   }
 
                   auto lower = expidx.lower_bound(100);
@@ -103,22 +103,22 @@ struct limit_order {
                      indexed_by< N(byval), const_mem_fun<test_k256, key256, &test_k256::get_val> >
                   > testtable( N(multitest), N(exchange) ); // Code must be same as the receiver? Scope doesn't have to be.
 
-                  const auto& entry1 = testtable.emplace( payer, [&]( auto& o ) {
+                  testtable.emplace( payer, [&]( auto& o ) {
                      o.id = 1;
                      o.val = key256::make_from_word_sequence<uint64_t>(0ULL, 0ULL, 0ULL, 42ULL);
                   });
 
-                  const auto& entry2 = testtable.emplace( payer, [&]( auto& o ) {
+                  testtable.emplace( payer, [&]( auto& o ) {
                      o.id = 2;
                      o.val = key256::make_from_word_sequence<uint64_t>(1ULL, 2ULL, 3ULL, 4ULL);
                   });
 
-                  const auto& entry3 = testtable.emplace( payer, [&]( auto& o ) {
+                  testtable.emplace( payer, [&]( auto& o ) {
                      o.id = 3;
                      o.val = key256::make_from_word_sequence<uint64_t>(0ULL, 0ULL, 0ULL, 42ULL);
                   });
 
-                  const auto* e = testtable.find( 2 );
+                  auto itr = testtable.find( 2 );
 
                   print("Items sorted by primary key:\n");
                   for( const auto& item : testtable ) {
@@ -133,14 +133,13 @@ struct limit_order {
                   auto lower2 = validx.lower_bound(key256::make_from_word_sequence<uint64_t>(0ULL, 0ULL, 0ULL, 50ULL));
                   print("First entry with a val of at least 50 has ID=", lower2->id, ".\n");
 
-                  if( &*lower2 == e ) {
+                  if( testtable.iterator_to(*lower2) == itr ) {
                      print("Previously found entry is the same as the one found earlier with a primary key value of 2.\n");
                   }
 
                   print("Items sorted by val (secondary key):\n");
                   for( const auto& item : validx ) {
-                     print(" ID=", item.primary_key(), ", val=");
-                     cout << item.val << "\n";
+                     print(" ID=", item.primary_key(), ", val=", item.val, "\n");
                   }
 
                   auto upper = validx.upper_bound(key256::make_from_word_sequence<uint64_t>(0ULL, 0ULL, 0ULL, 42ULL));
@@ -148,12 +147,11 @@ struct limit_order {
                   print("First entry with a val greater than 42 has ID=", upper->id, ".\n");
 
                   print("Removed entry with ID=", lower1->id, ".\n");
-                  testtable.remove( *lower1 );
+                  validx.erase( lower1 );
 
                   print("Items sorted by primary key:\n");
                   for( const auto& item : testtable ) {
-                     print(" ID=", item.primary_key(), ", val=");
-                     cout << item.val << "\n";
+                     print(" ID=", item.primary_key(), ", val=", item.val, "\n");
                   }
 
                }
@@ -170,7 +168,8 @@ struct limit_order {
 namespace multi_index_test {
    extern "C" {
       /// The apply method implements the dispatch of events to this contract
-      void apply( uint64_t code, uint64_t action ) {
+      void apply( uint64_t /* receiver */, uint64_t code, uint64_t action ) {
+         require_auth(code);
          eosio_assert(eosio::dispatch<multi_index_test, multi_index_test::trigger>(code, action),
                       "Could not dispatch");
       }
